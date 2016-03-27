@@ -1,12 +1,12 @@
-//: ## Basic Observables
-//: Turf provides a reactive approach to listening for database changes
-//: 
+//: ## Intermediate Observables
+//: Here we'll follow on from BasicObservables and show their transactionality which allows us to fetch other values when something changes.
 import Turf
 
 //: The model we will write to the database
 struct User {
     let firstName: String
     let lastName: String
+    let isCurrent: Bool
 }
 
 //: The collection we will store `User`s in
@@ -26,7 +26,8 @@ final class UsersCollection: Collection {
     func serializeValue(value: User) -> NSData {
         let dictionaryRepresentation: [String: AnyObject] = [
             "firstName": value.firstName,
-            "lastName": value.lastName
+            "lastName": value.lastName,
+            "isCurrent": value.isCurrent
         ]
 
         return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
@@ -38,10 +39,11 @@ final class UsersCollection: Collection {
 
         guard let
             firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String else {
+            lastName = json["lastName"] as? String,
+            isCurrent = json["isCurrent"] as? Bool else {
                 return nil
         }
-        return User(firstName: firstName, lastName: lastName)
+        return User(firstName: firstName, lastName: lastName, isCurrent: isCurrent)
     }
 
     // When intializing a database we must set up the collection by registering it and any
@@ -70,24 +72,45 @@ let connection = try! database.newConnection()
 //: Open a special kind of connection which we can use to observe changes to `database`
 let observingConnection = try! database.newObservingConnection()
 
-//: We'll watch for changes to the `users` collection in `database`.
+//: We'll watch for changes to the `users` collection and grab a current user.
+let currentUser = ObserverOf<User?>(initalValue: nil)
 let disposable =
     observingConnection.observeCollection(collections.users)
-    .didChange { (userCollection, changeSet) in
-        print("Changes for Bill? \(changeSet.hasChangeForKey("BillMurray"))")
-        print("All changes", changeSet.changes)
-    }
+        .didChange { (userCollection, changeSet) in
+            guard let collection = userCollection else { return }
 
-//: Lets write some changes to the database. See <Basic>. These writes will trigger our didChange callback above
+            // `collection` is a snapshot of the database at the time the observed collection changed.
+            // It uses an implicit `ReadTransaction` under the hood meaning that any subsequent changes 
+            // keeps the transactionality of performing fetches here.
+
+            let current = collection.allValues.filter { user -> Bool in
+                return user.isCurrent
+            }.first
+
+            currentUser.setValue(current, fromTransaction: collection.readTransaction)
+        }
+
+//: `currentUser.value` will now be updated any time the `users` collection is written to
+let currentUserDisposable = currentUser.didChange { (currentUser, changedOnTransaction) in
+    if let currentUser = currentUser {
+        print("The current user is \(currentUser.firstName) \(currentUser.lastName)")
+    } else {
+        print("There is no current user")
+    }
+}
+
+//: Lets write some changes to the database. See <Basic>. 
+//: These writes will trigger our observable collection `didChange` callback above. See <BasicObservables>. When setting `currentUser` it will trigger our `currentUser.didChange` callback.
 try! connection.readWriteTransaction { transaction in
-    let bill = User(firstName: "Bill", lastName: "Murray")
-    let tom = User(firstName: "Tom", lastName: "Hanks")
+    // Play around changing `isCurrent` and check out the output above when there is no current user!
+    let bill = User(firstName: "Bill", lastName: "Murray", isCurrent: false)
+    let tom = User(firstName: "Tom", lastName: "Hanks", isCurrent: true)
 
     let usersCollection = transaction.readWrite(collections.users)
     usersCollection.setValue(bill, forKey: "BillMurray")
     usersCollection.setValue(tom, forKey: "TomHanks")
 }
 
-//: Dispose of the didChange observer and by disposing ancestors we also dispose of the observedCollection users.
-//: This step is optional here as the observers will be disposed of when they go out of scope and get dealloc'd
+// We could pass `true` here and it would have the same effect as the second `dispose` below
+currentUserDisposable.dispose(disposeAncestors: false)
 disposable.dispose(disposeAncestors: true)
