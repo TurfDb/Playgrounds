@@ -13,4 +13,7 @@
    <FileRef
       location = "group:IntermediateObservables.playground">
    </FileRef>
+   <FileRef
+      location = "group:BasicSecondaryIndexing.playground">
+   </FileRef>
 </Workspace>
