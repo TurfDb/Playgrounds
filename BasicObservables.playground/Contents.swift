@@ -4,7 +4,6 @@ import Turf
 struct User {
     let firstName: String
     let lastName: String
-    let dob: NSDate
 }
 
 //: The collection we will store `User`s in
@@ -24,8 +23,7 @@ final class UsersCollection: Collection {
     func serializeValue(value: User) -> NSData {
         let dictionaryRepresentation: [String: AnyObject] = [
             "firstName": value.firstName,
-            "lastName": value.lastName,
-            "dob": value.dob.timeIntervalSince1970
+            "lastName": value.lastName
         ]
 
         return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
@@ -37,11 +35,10 @@ final class UsersCollection: Collection {
 
         guard let
             firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String,
-            dob = (json["dob"] as? Double).flatMap({ return NSDate(timeIntervalSince1970: $0) }) else {
+            lastName = json["lastName"] as? String else {
                 return nil
         }
-        return User(firstName: firstName, lastName: lastName, dob: dob)
+        return User(firstName: firstName, lastName: lastName)
     }
 
     // When intializing a database we must set up the collection by registering it and any
@@ -62,40 +59,31 @@ final class Collections: CollectionsContainer {
     }
 }
 
-//: Create a new database and open a connection to it
+//: Create a new database
 let collections = Collections()
-let database = try! Database(path: "Simple.sqlite", collections: collections)
+let database = try! Database(path: "BasicObservable.sqlite", collections: collections)
+//: Open a connection which we can use to read and write values to `database`
 let connection = try! database.newConnection()
+//: Open a special kind of connection which we can use to observe changes to `database`
+let observingConnection = try! database.newObservingConnection()
 
-//: A `ReadWriteTransaction` allows you to modify the database in a transactional way. That is
-//: if the app crashes, any changes made inside the transaction will not be persisted.
-//: Grouping multiple reads and writes per transaction is also more performant than many small
-//: transactions.
-try! connection.readWriteTransaction { transaction in
-    let dob = NSDateComponents()
-    dob.day = 21
-    dob.month = 9
-    dob.year = 1950
-    let date = NSCalendar.currentCalendar().dateFromComponents(dob)!
-
-    let bill = User(firstName: "Bill", lastName: "Murray", dob: date)
-
-    // Create a writable view of the Users collection
-    let usersCollection = transaction.readWrite(collections.users)
-    // `usersCollection` and `transaction` are only valid within the current closure's scope
-    usersCollection.setValue(bill, forKey: "billMurray")
-}
-
-try! connection.readWriteTransaction { transaction in
-    // Create a read only view of the Users collection
-    let usersCollection = transaction.readOnly(collections.users)
-    // `usersCollection` and `transaction` are only valid within the current closure's scope
-
-    // Fetch a value by primary key from the users collection
-    if let bill = usersCollection.valueForKey("billMurray") {
-        print("Found Bill!")
-    } else {
-        print("No Bill")
+//: We'll watch for changes to the `users` collection in `database`.
+let disposable =
+    observingConnection.observeCollection(collections.users)
+    .didChange { (userCollection, changeSet) in
+        print("Changes for Bill? \(changeSet.hasChangeForKey("BillMurray"))")
+        print("All changes", changeSet.changes)
     }
+
+//: Lets write some changes to the database. See <Basic>. These writes will trigger our didChange callback above
+try! connection.readWriteTransaction { transaction in
+    let bill = User(firstName: "Bill", lastName: "Murray")
+    let tom = User(firstName: "Tom", lastName: "Hanks")
+
+    let usersCollection = transaction.readWrite(collections.users)
+    usersCollection.setValue(bill, forKey: "BillMurray")
+    usersCollection.setValue(tom, forKey: "TomHanks")
 }
 
+//: Dispose of the didChange observer and by disposing ancestors we also dispose of the observedCollection users
+disposable.dispose(disposeAncestors: true)

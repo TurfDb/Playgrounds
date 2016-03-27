@@ -5,6 +5,9 @@
       location = "container:../Turf/Turf.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:Simple.playground">
+      location = "group:/Users/jordanhamill/Documents/Projects/TurfDb/Playgrounds/Basic.playground">
+   </FileRef>
+   <FileRef
+      location = "group:/Users/jordanhamill/Documents/Projects/TurfDb/Playgrounds/BasicObservables.playground">
    </FileRef>
 </Workspace>
