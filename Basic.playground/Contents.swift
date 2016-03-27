@@ -1,13 +1,14 @@
+//: We're going to walk through how to save a `User` in Turf and then read them back out of the database
 import Turf
 
 //: The model we will write to the database
 struct User {
     let firstName: String
     let lastName: String
-    let dob: NSDate
 }
 
-//: The collection we will store `User`s in
+//: One of the main goals for Turf is to keep database responsibility out of the model. A common complaint with Core Data and Realm is that you must subclass from something, immediately leaking knowledge. With Turf, you don't even have to conform to a protocol. All database knowledge is kept out of the model and defined within a class that conforms to `Collection`.
+//: Collections in Turf are also schemaless.
 final class UsersCollection: Collection {
     // `Collection`s are strongly typed to contain only a single type of value
     typealias Value = User
@@ -19,13 +20,11 @@ final class UsersCollection: Collection {
     // See <Performance enhancements>
     let valueCacheSize: Int? = nil
 
-    // All database knowledge is kept out of the model and defined within the `Collection`.
     // Here we describe how to persist a `User`.
     func serializeValue(value: User) -> NSData {
         let dictionaryRepresentation: [String: AnyObject] = [
             "firstName": value.firstName,
-            "lastName": value.lastName,
-            "dob": value.dob.timeIntervalSince1970
+            "lastName": value.lastName
         ]
 
         return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
@@ -37,15 +36,13 @@ final class UsersCollection: Collection {
 
         guard let
             firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String,
-            dob = (json["dob"] as? Double).flatMap({ return NSDate(timeIntervalSince1970: $0) }) else {
+            lastName = json["lastName"] as? String else {
                 return nil
         }
-        return User(firstName: firstName, lastName: lastName, dob: dob)
+        return User(firstName: firstName, lastName: lastName)
     }
 
-    // When intializing a database we must set up the collection by registering it and any
-    // possible extensions. See <Secondary indexing>
+    // When intializing a database we must set up the collection by registering it and any possible extensions. See <BasicSecondaryIndexing>
     func setUp(transaction: ReadWriteTransaction) throws {
         // This line is required for every collection you set up
         try transaction.registerCollection(self)
@@ -72,13 +69,7 @@ let connection = try! database.newConnection()
 //: Grouping multiple reads and writes per transaction is also more performant than many small
 //: transactions.
 try! connection.readWriteTransaction { transaction in
-    let dob = NSDateComponents()
-    dob.day = 21
-    dob.month = 9
-    dob.year = 1950
-    let date = NSCalendar.currentCalendar().dateFromComponents(dob)!
-
-    let bill = User(firstName: "Bill", lastName: "Murray", dob: date)
+    let bill = User(firstName: "Bill", lastName: "Murray")
 
     // Create a writable view of the Users collection
     let usersCollection = transaction.readWrite(collections.users)
@@ -98,4 +89,20 @@ try! connection.readWriteTransaction { transaction in
         print("No Bill")
     }
 }
+
+//: We used a `ReadWriteTransaction` to read the values back out above, but to provide stronger guarantees and utilise the type system, we can create a `ReadTransaction` that is read only.
+
+try! connection.readTransaction { transaction in
+    // Create a read only view of the Users collection
+    let usersCollection = transaction.readOnly(collections.users)
+    // This line wont compile!
+//    let usersCollection = transaction.readWrite(collections.users)
+
+    if let bill = usersCollection.valueForKey("BillMurray") {
+        print("Found \(bill.firstName) \(bill.lastName)!")
+    } else {
+        print("No Bill")
+    }
+}
+
 

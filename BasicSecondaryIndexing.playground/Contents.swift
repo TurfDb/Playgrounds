@@ -1,5 +1,5 @@
 //: ## Basic Secondary Indexing
-//: A secondary index is a database extension which allows you to efficiently query the database.
+//: A secondary index is a database extension which allows you to efficiently query a collection.
 //: We simply register the extension with a collection and define which properties we would like to query on and how to read them.
 import Turf
 
@@ -10,7 +10,6 @@ struct User {
     let isActive: Bool
 }
 
-//: The collection we will store `User`s in.
 //: By conforming to `IndexedCollection` it will expose methods on `ReadCollection<UsersCollection>` which allow us to perform indexed queries. It will also expose methods on `ReadWriteCollection<UsersCollection>` which we'll  touch on near the end of this playground.
 final class UsersCollection: Collection, IndexedCollection {
     // `Collection`s are strongly typed to contain only a single type of value
@@ -23,23 +22,21 @@ final class UsersCollection: Collection, IndexedCollection {
     // See <Performance enhancements>
     let valueCacheSize: Int? = nil
 
-    //: We must define what collection and properties are indexed when creating a new secondary index
+//: We must define what collection and properties are indexed when creating a new secondary index
     let index: SecondaryIndex<UsersCollection, IndexedProperties>
     let indexed = IndexedProperties()
 
-    //: We also have to keep a list of extensions that are to be executed on mutation
+//: We also have to keep a list of extensions that are to be executed on mutation
     let associatedExtensions: [Extension]
 
     init() {
         index = SecondaryIndex(collectionName: name, properties: indexed, version: 0)
         associatedExtensions = [index]
 
-        //: By setting the `collection` the secondary index can build itself if there are already values in the `Users` collection
+//: By setting the `collection` the secondary index can build itself if there are already values in the `Users` collection
         index.collection = self
     }
 
-    // All database knowledge is kept out of the model and defined within the `Collection`.
-    // Here we describe how to persist a `User`.
     func serializeValue(value: User) -> NSData {
         let dictionaryRepresentation: [String: AnyObject] = [
             "firstName": value.firstName,
@@ -50,7 +47,6 @@ final class UsersCollection: Collection, IndexedCollection {
         return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
     }
 
-    // And here we describe how to deserialize our persisted user.
     func deserializeValue(data: NSData) -> Value? {
         let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
 
@@ -63,18 +59,19 @@ final class UsersCollection: Collection, IndexedCollection {
         return User(firstName: firstName, lastName: lastName, isActive: isActive)
     }
 
-    // When intializing a database we must set up the collection by registering it and any
-    // possible extensions. See <Secondary indexing>
     func setUp(transaction: ReadWriteTransaction) throws {
-        // This line is required for every collection you set up
         try transaction.registerCollection(self)
-        //: We must register the extension
+//: We must register the extension
         try transaction.registerExtension(index)
     }
 
-    //: We define the properties of a `User` that are indexed and therefore queryable
+//: We define the properties of a `User` that are indexed and therefore queryable
     struct IndexedProperties: Turf.IndexedProperties {
-        let isActive = IndexedProperty<UsersCollection, Bool>(name: "isActive") { return $0.isActive }
+
+        let isActive = IndexedProperty<UsersCollection, Bool>(name: "isActive") { user -> Bool in
+//: This closure is used to grab the value that is indexed from the a model instance
+            return user.isActive
+        }
 
         var allProperties: [IndexedPropertyFromCollection<UsersCollection>] {
             // We must list all the properties that are indexed to register them in SQLite
@@ -88,7 +85,6 @@ final class UsersCollection: Collection, IndexedCollection {
 final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
-    // We must set up each collection defined within the container
     func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
         try users.setUp(transaction)
     }

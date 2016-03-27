@@ -2,27 +2,19 @@
 //: Here we'll follow on from BasicObservables and show their transactionality which allows us to fetch other values when something changes.
 import Turf
 
-//: The model we will write to the database
 struct User {
     let firstName: String
     let lastName: String
     let isCurrent: Bool
 }
 
-//: The collection we will store `User`s in
 final class UsersCollection: Collection {
-    // `Collection`s are strongly typed to contain only a single type of value
     typealias Value = User
 
-    // This is the unique name for the collection
     let name = "Users"
-    // A schema version is used for migrations. See <Migrations>
     let schemaVersion = UInt64(1)
-    // See <Performance enhancements>
     let valueCacheSize: Int? = nil
 
-    // All database knowledge is kept out of the model and defined within the `Collection`.
-    // Here we describe how to persist a `User`.
     func serializeValue(value: User) -> NSData {
         let dictionaryRepresentation: [String: AnyObject] = [
             "firstName": value.firstName,
@@ -33,7 +25,6 @@ final class UsersCollection: Collection {
         return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
     }
 
-    // And here we describe how to deserialize our persisted user.
     func deserializeValue(data: NSData) -> Value? {
         let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
 
@@ -46,15 +37,11 @@ final class UsersCollection: Collection {
         return User(firstName: firstName, lastName: lastName, isCurrent: isCurrent)
     }
 
-    // When intializing a database we must set up the collection by registering it and any
-    // possible extensions. See <Secondary indexing>
     func setUp(transaction: ReadWriteTransaction) throws {
-        // This line is required for every collection you set up
         try transaction.registerCollection(self)
     }
 }
 
-//: A container that holds all collections associated with a `Database` instance
 final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
@@ -83,10 +70,12 @@ let disposable =
             // It uses an implicit `ReadTransaction` under the hood meaning that any subsequent changes 
             // keeps the transactionality of performing fetches here.
 
+            // `collection.allValues` performs a fetch from the database
             let current = collection.allValues.filter { user -> Bool in
                 return user.isCurrent
             }.first
 
+            // Update our observed value to the newest value
             currentUser.setValue(current, fromTransaction: collection.readTransaction)
         }
 
