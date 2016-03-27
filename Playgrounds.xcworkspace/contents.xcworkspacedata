@@ -16,4 +16,7 @@
    <FileRef
       location = "group:BasicSecondaryIndexing.playground">
    </FileRef>
+   <FileRef
+      location = "group:IntermediateSecondaryIndexing.playground">
+   </FileRef>
 </Workspace>
