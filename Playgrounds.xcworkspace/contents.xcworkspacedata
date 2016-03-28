@@ -22,4 +22,7 @@
    <FileRef
       location = "group:AdvancedObservables.playground">
    </FileRef>
+   <FileRef
+      location = "group:PerformanceEnhancements.playground">
+   </FileRef>
 </Workspace>
