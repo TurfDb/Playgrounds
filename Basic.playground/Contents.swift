@@ -17,7 +17,7 @@ final class UsersCollection: Collection {
     let name = "Users"
     // A schema version is used for migrations. See <Migrations>
     let schemaVersion = UInt64(1)
-    // See <Performance enhancements>
+    // See <PerformanceEnhancements>
     let valueCacheSize: Int? = nil
 
     // Here we describe how to persist a `User`.

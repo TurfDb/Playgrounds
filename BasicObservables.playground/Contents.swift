@@ -51,7 +51,7 @@ final class Collections: CollectionsContainer {
 
 //: Create a new database
 let collections = Collections()
-let database = try! Database(path: "BasicObservable.sqlite", collections: collections)
+let database = try! Database(path: "BasicObservables.sqlite", collections: collections)
 //: Open a connection which we can use to read and write values to `database`
 let connection = try! database.newConnection()
 //: Open a special kind of connection which we can use to observe changes to `database`
