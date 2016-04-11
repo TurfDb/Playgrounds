@@ -43,7 +43,7 @@ final class UsersCollection: Collection {
     }
 
     // When intializing a database we must set up the collection by registering it and any possible extensions. See <BasicSecondaryIndexing>
-    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
+    func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
         // This line is required for every collection you set up
         try transaction.registerCollection(self)
     }
@@ -54,8 +54,8 @@ final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
     // We must set up each collection defined within the container
-    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
-        try users.setUp(transaction)
+    func setUpCollections<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
+        try users.setUp(using: transaction)
     }
 }
 

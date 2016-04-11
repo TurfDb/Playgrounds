@@ -50,7 +50,7 @@ final class UsersCollection: Collection, IndexedCollection {
         return User(firstName: firstName, lastName: lastName, isActive: isActive, email: json["email"] as? String)
     }
 
-    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
+    func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
         try transaction.registerExtension(index)
     }
@@ -76,8 +76,8 @@ final class UsersCollection: Collection, IndexedCollection {
 final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
-    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
-        try users.setUp(transaction)
+    func setUpCollections<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
+        try users.setUp(using: transaction)
     }
 }
 

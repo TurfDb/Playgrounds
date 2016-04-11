@@ -56,7 +56,7 @@ final class MoviesCollection: Collection {
             name: name)
     }
 
-    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
+    func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
     }
 }
@@ -107,7 +107,7 @@ final class UsersCollection: Collection, IndexedCollection {
             favouriteMovies: favouriteMovieUuids)
     }
 
-    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
+    func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
         try transaction.registerExtension(index)
     }
@@ -127,9 +127,9 @@ final class Collections: CollectionsContainer {
     let users = UsersCollection()
     let movies = MoviesCollection()
 
-    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
-        try users.setUp(transaction)
-        try movies.setUp(transaction)
+    func setUpCollections<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
+        try users.setUp(using: transaction)
+        try movies.setUp(using: transaction)
     }
 }
 

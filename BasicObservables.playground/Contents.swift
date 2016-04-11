@@ -36,7 +36,7 @@ final class UsersCollection: Collection {
         return User(firstName: firstName, lastName: lastName)
     }
 
-    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
+    func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
     }
 }
@@ -44,8 +44,8 @@ final class UsersCollection: Collection {
 final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
-    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
-        try users.setUp(transaction)
+    func setUpCollections<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
+        try users.setUp(using: transaction)
     }
 }
 
