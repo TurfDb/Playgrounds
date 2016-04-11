@@ -2,7 +2,7 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "container:../Turf/Turf.xcodeproj">
+      location = "group:../Turf/Turf.xcodeproj">
    </FileRef>
    <FileRef
       location = "group:/Users/jordanhamill/Documents/Projects/TurfDb/Playgrounds/Basic.playground">

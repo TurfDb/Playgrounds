@@ -50,7 +50,7 @@ final class UsersCollection: Collection, IndexedCollection {
         return User(firstName: firstName, lastName: lastName, isActive: isActive, email: json["email"] as? String)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
         try transaction.registerExtension(index)
     }
@@ -76,7 +76,7 @@ final class UsersCollection: Collection, IndexedCollection {
 final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
-    func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
+    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
         try users.setUp(transaction)
     }
 }
@@ -87,7 +87,7 @@ let database = try! Database(path: "IntermediateSecondaryIndexing.sqlite", colle
 let connection = try! database.newConnection()
 
 //: Here we'll add a few rows that we can query
-try! connection.readWriteTransaction { transaction in
+try! connection.readWriteTransaction { transaction, collections in
     let usersCollection = transaction.readWrite(collections.users)
 
     usersCollection.removeAllValues()
@@ -114,7 +114,7 @@ try! connection.readWriteTransaction { transaction in
 }
 
 //: Lets query the collection
-try! connection.readTransaction { transaction in
+try! connection.readTransaction { transaction, collections in
     let usersCollection = transaction.readOnly(collections.users)
 
     let activeUsersWithoutAnEmail = usersCollection
@@ -127,5 +127,7 @@ try! connection.readTransaction { transaction in
 //    let predicate = usersCollection.indexed.isActive.isNil()
 
     let usersWithAnEmailHostedAtExampleDotCom = usersCollection
-        .findValuesWhere(usersCollection.indexed.email.isLike("%@example.com"))
+        .findValuesWhere(usersCollection.indexed.email.isNotLike("%@example.com"))
+
+
 }

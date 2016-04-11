@@ -59,7 +59,7 @@ final class UsersCollection: Collection, IndexedCollection {
         return User(firstName: firstName, lastName: lastName, isActive: isActive)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
 //: We must register the extension
         try transaction.registerExtension(index)
@@ -85,7 +85,7 @@ final class UsersCollection: Collection, IndexedCollection {
 final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
-    func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
+    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
         try users.setUp(transaction)
     }
 }
@@ -96,7 +96,7 @@ let database = try! Database(path: "BasicSecondaryIndexing.sqlite", collections:
 let connection = try! database.newConnection()
 
 //: Here we'll add a few rows that we can query
-try! connection.readWriteTransaction { transaction in
+try! connection.readWriteTransaction { transaction, collections in
     let usersCollection = transaction.readWrite(collections.users)
 
     usersCollection.setValue(
@@ -113,7 +113,7 @@ try! connection.readWriteTransaction { transaction in
 }
 
 //: Lets query the collection for active and inactive users
-try! connection.readTransaction { transaction in
+try! connection.readTransaction { transaction, collections in
     let usersCollection = transaction.readOnly(collections.users)
     let count = usersCollection.countValuesWhere(usersCollection.indexed.isActive.equals(true))
     let activeUsers = usersCollection.findValuesWhere(usersCollection.indexed.isActive.equals(true))
@@ -121,14 +121,14 @@ try! connection.readTransaction { transaction in
 }
 
 //: Here we'll delete inactive users
-try! connection.readWriteTransaction { transaction in
+try! connection.readWriteTransaction { transaction, collections in
     let usersCollection = transaction.readWrite(collections.users)
 
     usersCollection.removeValuesWhere(usersCollection.indexed.isActive.equals(false))
 }
 
 //: Lets check if there are any inactive users left
-try! connection.readTransaction { transaction in
+try! connection.readTransaction { transaction, collections in
     let usersCollection = transaction.readOnly(collections.users)
     let activeUsers = usersCollection.findValuesWhere(usersCollection.indexed.isActive.equals(true))
     let inactiveUsers = usersCollection.findValuesWhere(usersCollection.indexed.isActive.equals(false))

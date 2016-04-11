@@ -48,7 +48,7 @@ final class MoviesCollection: Collection {
             name: name)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
     }
 }
@@ -99,7 +99,7 @@ final class UsersCollection: Collection, IndexedCollection {
             favouriteMovies: favouriteMovieUuids)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
         try transaction.registerExtension(index)
     }
@@ -119,7 +119,7 @@ final class Collections: CollectionsContainer {
     let users = UsersCollection()
     let movies = MoviesCollection()
 
-    func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
+    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
         try users.setUp(transaction)
 //: Set up the new collection.
         try movies.setUp(transaction)
@@ -135,7 +135,7 @@ let observingConnection = try! database.newObservingConnection()
 
 
 //: When the current user changes we want to keep an up to date list of their favourite movies.
-let observableCurrentUserCurrentUsersFavouriteMovies = CollectionTypeObserver<[Movie]>(initalValue: [])
+let observableCurrentUsersFavouriteMovies = CollectionTypeObserver<[Movie], Collections>(initalValue: [])
 
 let observableUsersCollection = observingConnection.observeCollection(collections.users)
 
@@ -150,7 +150,7 @@ let observableCurrentUser =
 observableCurrentUser.didChange { (currentUser, transaction) in
     guard let currentUser = currentUser, readTransaction = transaction else {
 //: When there is no current user, set the movies collection to empty.
-        observableCurrentUserCurrentUsersFavouriteMovies.setValue([], fromTransaction: transaction)
+        observableCurrentUsersFavouriteMovies.setValue([], fromTransaction: transaction)
         return
     }
 
@@ -160,11 +160,11 @@ observableCurrentUser.didChange { (currentUser, transaction) in
         return moviesCollection.valueForKey(uuid)
     }
 //: Set the observable list to the movies we fetched.
-    observableCurrentUserCurrentUsersFavouriteMovies.setValue(movies, fromTransaction: readTransaction)
+    observableCurrentUsersFavouriteMovies.setValue(movies, fromTransaction: readTransaction)
 }
 
 //: Lets add some movies first - this shouldn't trigger any updates!
-try! connection.readWriteTransaction { (transaction) in
+try! connection.readWriteTransaction { transaction, collections in
     let moviesCollection = transaction.readWrite(collections.movies)
 
     let movies = [
@@ -181,7 +181,7 @@ try! connection.readWriteTransaction { (transaction) in
 }
 
 //: Lets add our users - this should trigger the observables.
-try! connection.readWriteTransaction { (transaction) in
+try! connection.readWriteTransaction { transaction, collections in
     let usersCollection = transaction.readWrite(collections.users)
 
     let bill = User(
@@ -210,4 +210,4 @@ try! connection.readWriteTransaction { (transaction) in
 }
 
 observableCurrentUser.value
-observableCurrentUserCurrentUsersFavouriteMovies.value
+observableCurrentUsersFavouriteMovies.value

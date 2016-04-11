@@ -56,7 +56,7 @@ final class MoviesCollection: Collection {
             name: name)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
     }
 }
@@ -107,7 +107,7 @@ final class UsersCollection: Collection, IndexedCollection {
             favouriteMovies: favouriteMovieUuids)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
         try transaction.registerExtension(index)
     }
@@ -127,7 +127,7 @@ final class Collections: CollectionsContainer {
     let users = UsersCollection()
     let movies = MoviesCollection()
 
-    func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
+    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
         try users.setUp(transaction)
         try movies.setUp(transaction)
     }
@@ -139,7 +139,7 @@ let connection = try! database.newConnection()
 let observingConnection = try! database.newObservingConnection()
 
 
-let observableCurrentUserCurrentUsersFavouriteMovies = CollectionTypeObserver<[Movie]>(initalValue: [])
+let observableCurrentUserCurrentUsersFavouriteMovies = CollectionTypeObserver<[Movie], Collections>(initalValue: [])
 
 //: Lets say in our app, the users collection is written to a lot, this will trigger our query to be run many, many times. The first way to improve this performance is to use a "Prepared Query". This reduces the overhead of not having to set up the query each time it is run.
 let currentUserQuery = try! observingConnection
@@ -173,7 +173,7 @@ observableCurrentUser.didChange { (currentUser, transaction) in
     observableCurrentUserCurrentUsersFavouriteMovies.setValue(movies, fromTransaction: readTransaction)
 }
 
-try! connection.readWriteTransaction { (transaction) in
+try! connection.readWriteTransaction { transaction, collections in
     let moviesCollection = transaction.readWrite(collections.movies)
 
     let movies = [
@@ -189,7 +189,7 @@ try! connection.readWriteTransaction { (transaction) in
     }
 }
 
-try! connection.readWriteTransaction { (transaction) in
+try! connection.readWriteTransaction { transaction, collections in
     let usersCollection = transaction.readWrite(collections.users)
 
     let bill = User(
@@ -201,13 +201,13 @@ try! connection.readWriteTransaction { (transaction) in
     let tom = User(
         firstName: "Tom",
         lastName: "Hanks",
-        isCurrent: true,
+        isCurrent: false,
         favouriteMovies: ["2", "3", "4"])
 
     let amy = User(
         firstName: "Amy",
         lastName: "Adams",
-        isCurrent: false,
+        isCurrent: true,
         favouriteMovies: ["1", "2", "4", "5"])
 
 

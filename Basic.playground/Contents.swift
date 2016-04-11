@@ -43,7 +43,7 @@ final class UsersCollection: Collection {
     }
 
     // When intializing a database we must set up the collection by registering it and any possible extensions. See <BasicSecondaryIndexing>
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         // This line is required for every collection you set up
         try transaction.registerCollection(self)
     }
@@ -54,7 +54,7 @@ final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
     // We must set up each collection defined within the container
-    func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
+    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
         try users.setUp(transaction)
     }
 }
@@ -68,16 +68,16 @@ let connection = try! database.newConnection()
 //: if the app crashes, any changes made inside the transaction will not be persisted.
 //: Grouping multiple reads and writes per transaction is also more performant than many small
 //: transactions.
-try! connection.readWriteTransaction { transaction in
+struct Test { }
+try! connection.readWriteTransaction { transaction, collections in
     let bill = User(firstName: "Bill", lastName: "Murray")
-
     // Create a writable view of the Users collection
     let usersCollection = transaction.readWrite(collections.users)
     // `usersCollection` and `transaction` are only valid within the current closure's scope
     usersCollection.setValue(bill, forKey: "BillMurray")
 }
 
-try! connection.readWriteTransaction { transaction in
+try! connection.readWriteTransaction { transaction, collections in
     // Create a read only view of the Users collection
     let usersCollection = transaction.readOnly(collections.users)
     // `usersCollection` and `transaction` are only valid within the current closure's scope
@@ -92,7 +92,7 @@ try! connection.readWriteTransaction { transaction in
 
 //: We used a `ReadWriteTransaction` to read the values back out above, but to provide stronger guarantees and utilise the type system, we can create a `ReadTransaction` that is read only.
 
-try! connection.readTransaction { transaction in
+try! connection.readTransaction { transaction, collections in
     // Create a read only view of the Users collection
     let usersCollection = transaction.readOnly(collections.users)
     // This line wont compile!

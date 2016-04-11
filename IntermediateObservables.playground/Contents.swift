@@ -37,7 +37,7 @@ final class UsersCollection: Collection {
         return User(firstName: firstName, lastName: lastName, isCurrent: isCurrent)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
     }
 }
@@ -46,7 +46,7 @@ final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
     // We must set up each collection defined within the container
-    func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
+    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
         try users.setUp(transaction)
     }
 }
@@ -60,9 +60,10 @@ let connection = try! database.newConnection()
 let observingConnection = try! database.newObservingConnection()
 
 //: We'll watch for changes to the `users` collection and grab a current user.
-let currentUser = ObserverOf<User?>(initalValue: nil)
+let currentUser = ObserverOf<User?, Collections>(initalValue: nil)
 let disposable =
-    observingConnection.observeCollection(collections.users)
+    observingConnection
+        .observeCollection(collections.users)
         .didChange { (userCollection, changeSet) in
             guard let collection = userCollection else { return }
 
@@ -90,7 +91,7 @@ let currentUserDisposable = currentUser.didChange { (currentUser, changedOnTrans
 
 //: Lets write some changes to the database. See <Basic>. 
 //: These writes will trigger our observable collection `didChange` callback above. See <BasicObservables>. When setting `currentUser` it will trigger our `currentUser.didChange` callback.
-try! connection.readWriteTransaction { transaction in
+try! connection.readWriteTransaction { transaction, collections in
     // Play around changing `isCurrent` and check out the output above when there is no current user!
     let bill = User(firstName: "Bill", lastName: "Murray", isCurrent: false)
     let tom = User(firstName: "Tom", lastName: "Hanks", isCurrent: true)

@@ -36,7 +36,7 @@ final class UsersCollection: Collection {
         return User(firstName: firstName, lastName: lastName)
     }
 
-    func setUp(transaction: ReadWriteTransaction) throws {
+    func setUp<Collections: CollectionsContainer>(transaction: ReadWriteTransaction<Collections>) throws {
         try transaction.registerCollection(self)
     }
 }
@@ -44,7 +44,7 @@ final class UsersCollection: Collection {
 final class Collections: CollectionsContainer {
     let users = UsersCollection()
 
-    func setUpCollections(transaction transaction: ReadWriteTransaction) throws {
+    func setUpCollections<Collections: CollectionsContainer>(transaction transaction: ReadWriteTransaction<Collections>) throws {
         try users.setUp(transaction)
     }
 }
@@ -66,7 +66,7 @@ let disposable =
     }
 
 //: Lets write some changes to the database. See <Basic>. These writes will trigger our didChange callback above
-try! connection.readWriteTransaction { transaction in
+try! connection.readWriteTransaction { transaction, collections in
     let bill = User(firstName: "Bill", lastName: "Murray")
     let tom = User(firstName: "Tom", lastName: "Hanks")
 
