@@ -60,7 +60,7 @@ let observingConnection = try! database.newObservingConnection()
 //: Now we can watch for changes to the `users` collection in `database`. The `didChange` callback will be called every time the users collection is modified.
 let disposable =
     observingConnection.observeCollection(collections.users)
-    .didChange { (userCollection, changeSet) in
+    .subscribeNext { (userCollection, changeSet) in
         print("Changes for Bill? \(changeSet.hasChangeForKey("BillMurray"))")
         print("All changes", changeSet.changes)
     }
@@ -75,6 +75,6 @@ try! connection.readWriteTransaction { transaction, collections in
     usersCollection.setValue(tom, forKey: "TomHanks")
 }
 
-//: Dispose of the didChange observer and by disposing ancestors we also dispose of the observedCollection users.
-//: This step is optional here as the observers will be disposed of when they go out of scope and get dealloc'd
-disposable.dispose(disposeAncestors: true)
+//: Dispose of the observer.
+//: This step is optional here as subscriptions will be cleaned up when a `Disposable` gets dealloc'd
+disposable.dispose()

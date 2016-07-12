@@ -135,33 +135,47 @@ let observingConnection = try! database.newObservingConnection()
 
 
 //: When the current user changes we want to keep an up to date list of their favourite movies.
-let observableCurrentUsersFavouriteMovies = CollectionTypeObserver<[Movie], Collections>(initalValue: [])
 
 let observableUsersCollection = observingConnection.observeCollection(collections.users)
 
 //: Lets utilise our secondary index to fetch the current user when the database changes.
-//: Our `valuesWhere` query will run every time the users collection changes. See <PerformanceEnhancements> for optimisations.
-//: `currentUser` will always represent the first value returned from the query - the current user!
+//: Our `values(matching:)` query will run every time the users collection changes. See <PerformanceEnhancements> for optimisations.
+//: We map the returned users to a single user + read transaction pair (`TransactionalValue`)
+//: so we can use the same transaction in a following subscriber.
 let observableCurrentUser =
     observableUsersCollection
-    .valuesWhere(collections.users.indexed.isCurrent.equals(true))
-    .first
+        .values(matching: collections.users.indexed.isCurrent.equals(true))
+        .map { transactionalUsers -> TransactionalValue<User?, Collections> in
 
-observableCurrentUser.didChange { (currentUser, transaction) in
-    guard let currentUser = currentUser, readTransaction = transaction else {
-//: When there is no current user, set the movies collection to empty.
-        observableCurrentUsersFavouriteMovies.setValue([], fromTransaction: transaction)
-        return
-    }
+            let transactionalCurrentUser = transactionalUsers.map { users -> User? in
+                return users.first
+            }
+            return transactionalCurrentUser
+        }
+//: `share()` creates a multicasting observable - many observers can subscribe to the one observable.
+//: The shared observable will not be disposed until all observers are disposed.
+//: We use share here so that the `map` on line 165 and the `subscribeNext` on line 226 use the same
+//: underlying observable instead of a new one for the `map` and a new one for the `subscribeNext`.
+//: `shareReplay()` is the same as `share()` but will replay the previous values on new subscriptions.
+        .shareReplay(bufferSize: 1)
 
-    let moviesCollection = readTransaction.readOnly(collections.movies)
-//: Fetch all movies the current user likes.
-    let movies = currentUser.favouriteMovies.flatMap { uuid in
-        return moviesCollection.valueForKey(uuid)
-    }
-//: Set the observable list to the movies we fetched.
-    observableCurrentUsersFavouriteMovies.setValue(movies, fromTransaction: readTransaction)
-}
+
+let observableCurrentUsersFavouriteMovies =
+    observableCurrentUser
+        .map { transactionalCurrentUser -> [Movie] in
+//: If there is no current user, return an empty array
+            guard let currentUser = transactionalCurrentUser.value else {
+                return []
+            }
+
+//: Now we can use the same transaction the user was fetched on to fetch all the movies the user likes
+            let moviesCollection = transactionalCurrentUser.transaction.readOnly(collections.movies)
+            let movies = currentUser.favouriteMovies.flatMap { uuid in
+                return moviesCollection.valueForKey(uuid)
+            }
+
+            return movies
+        }
 
 //: Lets add some movies first - this shouldn't trigger any updates!
 try! connection.readWriteTransaction { transaction, collections in
@@ -206,8 +220,12 @@ try! connection.readWriteTransaction { transaction, collections in
     usersCollection.setValue(amy, forKey: "AmyAdams")
     usersCollection.setValue(bill, forKey: "BillMurray")
     usersCollection.setValue(tom, forKey: "TomHanks")
-
 }
 
-observableCurrentUser.value
-observableCurrentUsersFavouriteMovies.value
+let currentUserDisposable = observableCurrentUser.subscribeNext { currentUserTransaction in
+    print(currentUserTransaction.value)
+}
+
+let moviesDisposable = observableCurrentUsersFavouriteMovies.subscribeNext { currentUsersMovies in
+    print(currentUsersMovies)
+}

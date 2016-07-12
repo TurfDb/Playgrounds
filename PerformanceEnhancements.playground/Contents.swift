@@ -139,7 +139,7 @@ let connection = try! database.newConnection()
 let observingConnection = try! database.newObservingConnection()
 
 
-let observableCurrentUserCurrentUsersFavouriteMovies = CollectionTypeObserver<[Movie], Collections>(initalValue: [])
+let observableUsersCollection = observingConnection.observeCollection(collections.users)
 
 //: Lets say in our app, the users collection is written to a lot, this will trigger our query to be run many, many times. The first way to improve this performance is to use a "Prepared Query". This reduces the overhead of not having to set up the query each time it is run.
 let currentUserQuery = try! observingConnection
@@ -151,27 +151,35 @@ let currentUserQuery = try! observingConnection
 //: In our case, we only want to query for a new current user iff the current user's `isCurrent` field is set to false. By prefiltering the collection's change set to see if the existing current user's key has a change, we don't have to run the query every time.
 
 let observableCurrentUser =
-    observingConnection.observeCollection(collections.users)
-        .valuesWhere(currentUserQuery, thread: .CallingThread,
-                     prefilterChangeSet: { (previousValues, changeSet) -> Bool in
-                        guard let currentUserBeforeChangeSet = previousValues.first else { return true }
-                        return changeSet.hasChangeForKey(currentUserBeforeChangeSet.key)
-                     }
-        )
-        .first
+    observableUsersCollection
+        .values(matching: currentUserQuery,
+            prefilter: { (changeSet, previousValues) -> Bool in
+                guard let currentUserBeforeChangeSet = previousValues.first else { return true }
+                return changeSet.hasChangeForKey(currentUserBeforeChangeSet.key)
+            })
+        .map { transactionalUsers -> TransactionalValue<User?, Collections> in
 
-observableCurrentUser.didChange { (currentUser, transaction) in
-    guard let currentUser = currentUser, readTransaction = transaction else {
-        observableCurrentUserCurrentUsersFavouriteMovies.setValue([], fromTransaction: transaction)
-        return
-    }
+            let transactionalCurrentUser = transactionalUsers.map { users -> User? in
+                return users.first
+            }
+            return transactionalCurrentUser
+        }
+        .shareReplay()
 
-    let moviesCollection = readTransaction.readOnly(collections.movies)
-    let movies = currentUser.favouriteMovies.flatMap { uuid in
-        return moviesCollection.valueForKey(uuid)
-    }
-    observableCurrentUserCurrentUsersFavouriteMovies.setValue(movies, fromTransaction: readTransaction)
-}
+let observableCurrentUsersFavouriteMovies =
+    observableCurrentUser
+        .map { transactionalCurrentUser -> [Movie] in
+            guard let currentUser = transactionalCurrentUser.value else {
+                return []
+            }
+
+            let moviesCollection = transactionalCurrentUser.transaction.readOnly(collections.movies)
+            let movies = currentUser.favouriteMovies.flatMap { uuid in
+                return moviesCollection.valueForKey(uuid)
+            }
+            
+            return movies
+        }
 
 try! connection.readWriteTransaction { transaction, collections in
     let moviesCollection = transaction.readWrite(collections.movies)
@@ -217,5 +225,10 @@ try! connection.readWriteTransaction { transaction, collections in
     
 }
 
-observableCurrentUser.value
-observableCurrentUserCurrentUsersFavouriteMovies.value
+let currentUserDisposable = observableCurrentUser.subscribeNext { currentUserTransaction in
+    print("Current user", currentUserTransaction.value)
+}
+
+let moviesDisposable = observableCurrentUsersFavouriteMovies.subscribeNext { currentUsersMovies in
+    print("Movies", currentUsersMovies)
+}

@@ -60,28 +60,25 @@ let connection = try! database.newConnection()
 let observingConnection = try! database.newObservingConnection()
 
 //: We'll watch for changes to the `users` collection and grab a current user.
-let currentUser = ObserverOf<User?, Collections>(initalValue: nil)
-let disposable =
-    observingConnection
-        .observeCollection(collections.users)
-        .didChange { (userCollection, changeSet) in
-            guard let collection = userCollection else { return }
+let currentUser = observingConnection
+    .observe(collection: collections.users)
+    //: `map` is a wrapper around `subscribeNext` that gets called when the collection changes.
+    //: It produces another observable of the mapped type (in this case `User?`)
+    .map { (userCollection, changeSet) -> User? in
+        // `userCollection` is a snapshot of the database at the time the observed collection changed.
+        // It uses an implicit `ReadTransaction` under the hood meaning that any subsequent changes
+        // keeps the transactionality of performing fetches here.
 
-            // `collection` is a snapshot of the database at the time the observed collection changed.
-            // It uses an implicit `ReadTransaction` under the hood meaning that any subsequent changes 
-            // keeps the transactionality of performing fetches here.
+        // `collection.allValues` performs a fetch from the database
+        let current = userCollection.allValues.filter { user -> Bool in
+            return user.isCurrent
+        }.first
 
-            // `collection.allValues` performs a fetch from the database
-            let current = collection.allValues.filter { user -> Bool in
-                return user.isCurrent
-            }.first
+        return current
+    }
 
-            // Update our observed value to the newest value
-            currentUser.setValue(current, fromTransaction: collection.readTransaction)
-        }
 
-//: `currentUser.value` will now be updated any time the `users` collection is written to
-let currentUserDisposable = currentUser.didChange { (currentUser, changedOnTransaction) in
+let currentUserDisposable = currentUser.subscribeNext { currentUser in
     if let currentUser = currentUser {
         print("The current user is \(currentUser.firstName) \(currentUser.lastName)")
     } else {
@@ -90,7 +87,7 @@ let currentUserDisposable = currentUser.didChange { (currentUser, changedOnTrans
 }
 
 //: Lets write some changes to the database. See <Basic>. 
-//: These writes will trigger our observable collection `didChange` callback above. See <BasicObservables>. When setting `currentUser` it will trigger our `currentUser.didChange` callback.
+//: These writes will trigger our observable collection `map` above. See <BasicObservables>. When setting `currentUser` it will trigger our `currentUser.didChange` callback.
 try! connection.readWriteTransaction { transaction, collections in
     // Play around changing `isCurrent` and check out the output above when there is no current user!
     let bill = User(firstName: "Bill", lastName: "Murray", isCurrent: false)
@@ -101,6 +98,4 @@ try! connection.readWriteTransaction { transaction, collections in
     usersCollection.setValue(tom, forKey: "TomHanks")
 }
 
-// We could pass `true` here and it would have the same effect as the second `dispose` below
-currentUserDisposable.dispose(disposeAncestors: false)
-disposable.dispose(disposeAncestors: true)
+currentUserDisposable.dispose()
