@@ -9,35 +9,35 @@ struct User {
     let lastName: String
 }
 
-final class UsersCollection: Collection {
+final class UsersCollection: TurfCollection {
     typealias Value = User
 
     let name = "Users"
     let schemaVersion = UInt64(1)
     let valueCacheSize: Int? = nil
 
-    func serializeValue(value: User) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: User) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "firstName": value.firstName,
             "lastName": value.lastName
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> Value? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> Value? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String else {
+        guard
+            let firstName = json["firstName"] as? String,
+            let lastName = json["lastName"] as? String else {
                 return nil
         }
         return User(firstName: firstName, lastName: lastName)
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
+        try transaction.register(collection: self)
     }
 }
 
@@ -59,9 +59,9 @@ let observingConnection = try! database.newObservingConnection()
 
 //: Now we can watch for changes to the `users` collection in `database`. The `didChange` callback will be called every time the users collection is modified.
 let disposable =
-    observingConnection.observeCollection(collections.users)
+    observingConnection.observe(collection: collections.users)
     .subscribeNext { (userCollection, changeSet) in
-        print("Changes for Bill? \(changeSet.hasChangeForKey("BillMurray"))")
+        print("Changes for Bill? \(changeSet.hasChange(for: "BillMurray"))")
         print("All changes", changeSet.changes)
     }
 
@@ -71,8 +71,8 @@ try! connection.readWriteTransaction { transaction, collections in
     let tom = User(firstName: "Tom", lastName: "Hanks")
 
     let usersCollection = transaction.readWrite(collections.users)
-    usersCollection.setValue(bill, forKey: "BillMurray")
-    usersCollection.setValue(tom, forKey: "TomHanks")
+    usersCollection.set(value: bill, forKey: "BillMurray")
+    usersCollection.set(value: tom, forKey: "TomHanks")
 }
 
 //: Dispose of the observer.

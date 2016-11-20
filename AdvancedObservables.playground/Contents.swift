@@ -19,28 +19,28 @@ struct User {
 }
 
 //: Our new collection for `Movie`s
-final class MoviesCollection: Collection {
+final class MoviesCollection: TurfCollection {
     typealias Value = Movie
 
     let name = "Movies"
     let schemaVersion = UInt64(1)
     let valueCacheSize: Int? = nil
 
-    func serializeValue(value: Movie) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: Movie) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "uuid": value.uuid,
             "name": value.name
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> Movie? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> Movie? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            uuid = json["uuid"] as? String,
-            name = json["name"] as? String else {
+        guard
+            let uuid = json["uuid"] as? String,
+            let name = json["name"] as? String else {
                 return nil
         }
         return Movie(
@@ -49,11 +49,11 @@ final class MoviesCollection: Collection {
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
+        try transaction.register(collection: self)
     }
 }
 
-final class UsersCollection: Collection, IndexedCollection {
+final class UsersCollection: TurfCollection, IndexedCollection {
     typealias Value = User
 
     let name = "Users"
@@ -71,25 +71,25 @@ final class UsersCollection: Collection, IndexedCollection {
         index.collection = self
     }
 
-    func serializeValue(value: User) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: User) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "firstName": value.firstName,
             "lastName": value.lastName,
             "isCurrent": value.isCurrent,
             "favouriteMovies": value.favouriteMovies
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> User? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> User? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String,
-            isCurrent = json["isCurrent"] as? Bool,
-            favouriteMovieUuids = json["favouriteMovies"] as? [String] else {
+        guard
+            let firstName = json["firstName"] as? String,
+            let lastName = json["lastName"] as? String,
+            let isCurrent = json["isCurrent"] as? Bool,
+            let favouriteMovieUuids = json["favouriteMovies"] as? [String] else {
                 return nil
         }
         return User(
@@ -100,8 +100,8 @@ final class UsersCollection: Collection, IndexedCollection {
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
-        try transaction.registerExtension(index)
+        try transaction.register(collection: self)
+        try transaction.register(extension: index)
     }
 
     struct IndexedProperties: Turf.IndexedProperties {
@@ -136,7 +136,7 @@ let observingConnection = try! database.newObservingConnection()
 
 //: When the current user changes we want to keep an up to date list of their favourite movies.
 
-let observableUsersCollection = observingConnection.observeCollection(collections.users)
+let observableUsersCollection = observingConnection.observe(collection: collections.users)
 
 //: Lets utilise our secondary index to fetch the current user when the database changes.
 //: Our `values(matching:)` query will run every time the users collection changes. See <PerformanceEnhancements> for optimisations.
@@ -144,7 +144,7 @@ let observableUsersCollection = observingConnection.observeCollection(collection
 //: so we can use the same transaction in a following subscriber.
 let observableCurrentUser =
     observableUsersCollection
-        .values(matching: collections.users.indexed.isCurrent.equals(true))
+        .values(where: collections.users.indexed.isCurrent.equals(true))
         .map { transactionalUsers -> TransactionalValue<User?, Collections> in
 
             let transactionalCurrentUser = transactionalUsers.map { users -> User? in
@@ -171,7 +171,7 @@ let observableCurrentUsersFavouriteMovies =
 //: Now we can use the same transaction the user was fetched on to fetch all the movies the user likes
             let moviesCollection = transactionalCurrentUser.transaction.readOnly(collections.movies)
             let movies = currentUser.favouriteMovies.flatMap { uuid in
-                return moviesCollection.valueForKey(uuid)
+                return moviesCollection.value(for: uuid)
             }
 
             return movies
@@ -190,7 +190,7 @@ try! connection.readWriteTransaction { transaction, collections in
     ]
 
     for movie in movies {
-        moviesCollection.setValue(movie, forKey: movie.uuid)
+        moviesCollection.set(value: movie, forKey: movie.uuid)
     }
 }
 
@@ -217,9 +217,9 @@ try! connection.readWriteTransaction { transaction, collections in
         favouriteMovies: ["1", "2", "4", "5"])
 
 
-    usersCollection.setValue(amy, forKey: "AmyAdams")
-    usersCollection.setValue(bill, forKey: "BillMurray")
-    usersCollection.setValue(tom, forKey: "TomHanks")
+    usersCollection.set(value: amy, forKey: "AmyAdams")
+    usersCollection.set(value: bill, forKey: "BillMurray")
+    usersCollection.set(value: tom, forKey: "TomHanks")
 }
 
 let currentUserDisposable = observableCurrentUser.subscribeNext { currentUserTransaction in
