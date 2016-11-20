@@ -1,3 +1,4 @@
+
 //: We're going to walk through how to save a `User` in Turf and then read them back out of the database
 import Turf
 
@@ -9,7 +10,7 @@ struct User {
 
 //: One of the main goals for Turf is to keep database responsibility out of the model. A common complaint with Core Data and Realm is that you must subclass from something, immediately leaking knowledge. With Turf, you don't even have to conform to a protocol. All database knowledge is kept out of the model and defined within a class that conforms to `Collection`.
 //: Collections in Turf are also schemaless.
-final class UsersCollection: Collection {
+final class UsersCollection: TurfCollection {
     // `Collection`s are strongly typed to contain only a single type of value
     typealias Value = User
 
@@ -21,22 +22,22 @@ final class UsersCollection: Collection {
     let valueCacheSize: Int? = nil
 
     // Here we describe how to persist a `User`.
-    func serializeValue(value: User) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: User) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "firstName": value.firstName,
             "lastName": value.lastName
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
     // And here we describe how to deserialize our persisted user.
-    func deserializeValue(data: NSData) -> Value? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> Value? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String else {
+        guard
+            let firstName = json["firstName"] as? String,
+            let lastName = json["lastName"] as? String else {
                 return nil
         }
         return User(firstName: firstName, lastName: lastName)
@@ -45,7 +46,7 @@ final class UsersCollection: Collection {
     // When intializing a database we must set up the collection by registering it and any possible extensions. See <BasicSecondaryIndexing>
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
         // This line is required for every collection you set up
-        try transaction.registerCollection(self)
+        try transaction.register(collection: self)
     }
 }
 
@@ -74,7 +75,7 @@ try! connection.readWriteTransaction { transaction, collections in
     // Create a writable view of the Users collection
     let usersCollection = transaction.readWrite(collections.users)
     // `usersCollection` and `transaction` are only valid within the current closure's scope
-    usersCollection.setValue(bill, forKey: "BillMurray")
+    usersCollection.set(value: bill, forKey: "BillMurray")
 }
 
 try! connection.readWriteTransaction { transaction, collections in
@@ -83,7 +84,7 @@ try! connection.readWriteTransaction { transaction, collections in
     // `usersCollection` and `transaction` are only valid within the current closure's scope
 
     // Fetch a value by primary key from the users collection
-    if let bill = usersCollection.valueForKey("BillMurray") {
+    if let bill = usersCollection.value(for: "BillMurray") {
         print("Found \(bill.firstName) \(bill.lastName)!")
     } else {
         print("No Bill")
@@ -98,7 +99,7 @@ try! connection.readTransaction { transaction, collections in
     // This line wont compile!
 //    let usersCollection = transaction.readWrite(collections.users)
 
-    if let bill = usersCollection.valueForKey("BillMurray") {
+    if let bill = usersCollection.value(for: "BillMurray") {
         print("Found \(bill.firstName) \(bill.lastName)!")
     } else {
         print("No Bill")

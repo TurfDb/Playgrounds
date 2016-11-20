@@ -8,37 +8,37 @@ struct User {
     let isCurrent: Bool
 }
 
-final class UsersCollection: Collection {
+final class UsersCollection: TurfCollection {
     typealias Value = User
 
     let name = "Users"
     let schemaVersion = UInt64(1)
     let valueCacheSize: Int? = nil
 
-    func serializeValue(value: User) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: User) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "firstName": value.firstName,
             "lastName": value.lastName,
             "isCurrent": value.isCurrent
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> Value? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> Value? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String,
-            isCurrent = json["isCurrent"] as? Bool else {
+        guard
+            let firstName = json["firstName"] as? String,
+            let lastName = json["lastName"] as? String,
+            let isCurrent = json["isCurrent"] as? Bool else {
                 return nil
         }
         return User(firstName: firstName, lastName: lastName, isCurrent: isCurrent)
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
+        try transaction.register(collection: self)
     }
 }
 
@@ -94,8 +94,8 @@ try! connection.readWriteTransaction { transaction, collections in
     let tom = User(firstName: "Tom", lastName: "Hanks", isCurrent: true)
 
     let usersCollection = transaction.readWrite(collections.users)
-    usersCollection.setValue(bill, forKey: "BillMurray")
-    usersCollection.setValue(tom, forKey: "TomHanks")
+    usersCollection.set(value: bill, forKey: "BillMurray")
+    usersCollection.set(value: tom, forKey: "TomHanks")
 }
 
 currentUserDisposable.dispose()

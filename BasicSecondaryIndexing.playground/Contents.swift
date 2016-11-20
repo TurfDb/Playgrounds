@@ -11,7 +11,7 @@ struct User {
 }
 
 //: By conforming to `IndexedCollection` it will expose methods on `ReadCollection<UsersCollection>` which allow us to perform indexed queries. It will also expose methods on `ReadWriteCollection<UsersCollection>` which we'll  touch on near the end of this playground.
-final class UsersCollection: Collection, IndexedCollection {
+final class UsersCollection: TurfCollection, IndexedCollection {
     // `Collection`s are strongly typed to contain only a single type of value
     typealias Value = User
 
@@ -37,32 +37,32 @@ final class UsersCollection: Collection, IndexedCollection {
         index.collection = self
     }
 
-    func serializeValue(value: User) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: User) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "firstName": value.firstName,
             "lastName": value.lastName,
             "isActive": value.isActive
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> Value? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> Value? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String,
-            isActive = json["isActive"] as? Bool else {
+        guard
+            let firstName = json["firstName"] as? String,
+            let lastName = json["lastName"] as? String,
+            let isActive = json["isActive"] as? Bool else {
                 return nil
         }
         return User(firstName: firstName, lastName: lastName, isActive: isActive)
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
+        try transaction.register(collection: self)
 //: We must register the extension
-        try transaction.registerExtension(index)
+        try transaction.register(extension: index)
     }
 
 //: We define the properties of a `User` that are indexed and therefore queryable
@@ -99,38 +99,40 @@ let connection = try! database.newConnection()
 try! connection.readWriteTransaction { transaction, collections in
     let usersCollection = transaction.readWrite(collections.users)
 
-    usersCollection.setValue(
-        User(firstName: "Amy", lastName: "Adams", isActive: true),
-        forKey: "AmyAdams")
+    usersCollection.set(
+        value: User(firstName: "Amy", lastName: "Adams", isActive: true),
+        forKey: "AmyAdams"
+    )
 
-    usersCollection.setValue(
-        User(firstName: "Tom", lastName: "Hanks", isActive: false),
-        forKey: "TomHanks")
+    usersCollection.set(
+        value: User(firstName: "Tom", lastName: "Hanks", isActive: false),
+        forKey: "TomHanks"
+    )
 
-    usersCollection.setValue(
-        User(firstName: "Bill", lastName: "Murray", isActive: true),
-        forKey: "BillMurray")
+    usersCollection.set(
+        value: User(firstName: "Bill", lastName: "Murray", isActive: true),
+        forKey: "BillMurray"
+    )
 }
 
 //: Lets query the collection for active and inactive users
 try! connection.readTransaction { transaction, collections in
     let usersCollection = transaction.readOnly(collections.users)
-    let count = usersCollection.countValuesWhere(usersCollection.indexed.isActive.equals(true))
-    let activeUsers = usersCollection.findValuesWhere(usersCollection.indexed.isActive.equals(true))
-    let inactiveUsers = usersCollection.findValuesWhere(usersCollection.indexed.isActive.equals(false))
+    let count = usersCollection.countValues(where: usersCollection.indexed.isActive.equals(true))
+    let activeUsers = usersCollection.findValues(where: usersCollection.indexed.isActive.equals(true))
+    let inactiveUsers = usersCollection.findValues(where: usersCollection.indexed.isActive.equals(false))
 }
 
 //: Here we'll delete inactive users
 try! connection.readWriteTransaction { transaction, collections in
     let usersCollection = transaction.readWrite(collections.users)
-
-    usersCollection.removeValuesWhere(usersCollection.indexed.isActive.equals(false))
+    usersCollection.removeValues(where: usersCollection.indexed.isActive.equals(false))
 }
 
 //: Lets check if there are any inactive users left
 try! connection.readTransaction { transaction, collections in
     let usersCollection = transaction.readOnly(collections.users)
-    let activeUsers = usersCollection.findValuesWhere(usersCollection.indexed.isActive.equals(true))
-    let inactiveUsers = usersCollection.findValuesWhere(usersCollection.indexed.isActive.equals(false))
+    let activeUsers = usersCollection.findValues(where: usersCollection.indexed.isActive.equals(true))
+    let inactiveUsers = usersCollection.findValues(where: usersCollection.indexed.isActive.equals(false))
 }
 

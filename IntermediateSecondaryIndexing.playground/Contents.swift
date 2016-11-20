@@ -9,7 +9,7 @@ struct User {
     let email: String?
 }
 
-final class UsersCollection: Collection, IndexedCollection {
+final class UsersCollection: TurfCollection, IndexedCollection {
     typealias Value = User
 
     let name = "Users"
@@ -27,32 +27,32 @@ final class UsersCollection: Collection, IndexedCollection {
         index.collection = self
     }
 
-    func serializeValue(value: User) -> NSData {
-        var dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: User) -> Data {
+        var dictionaryRepresentation: [String: Any] = [
             "firstName": value.firstName,
             "lastName": value.lastName,
             "isActive": value.isActive,
         ]
-        if let email = value.email { dictionaryRepresentation["email"] = email }
+        dictionaryRepresentation["email"] = value.email
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> Value? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> Value? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String,
-            isActive = json["isActive"] as? Bool  else {
+        guard
+            let firstName = json["firstName"] as? String,
+            let lastName = json["lastName"] as? String,
+            let isActive = json["isActive"] as? Bool else {
                 return nil
         }
         return User(firstName: firstName, lastName: lastName, isActive: isActive, email: json["email"] as? String)
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
-        try transaction.registerExtension(index)
+        try transaction.register(collection: self)
+        try transaction.register(extension: index)
     }
 
 //: We'll define a few extra indexed properties
@@ -92,25 +92,30 @@ try! connection.readWriteTransaction { transaction, collections in
 
     usersCollection.removeAllValues()
 
-    usersCollection.setValue(
-        User(firstName: "Amy", lastName: "Adams", isActive: true, email: nil),
-        forKey: "AmyAdams")
+    usersCollection.set(
+        value: User(firstName: "Amy", lastName: "Adams", isActive: true, email: nil),
+        forKey: "AmyAdams"
+    )
 
-    usersCollection.setValue(
-        User(firstName: "Jennifer", lastName: "Laurence", isActive: false, email: "jen@somewhere.com"),
-        forKey: "JenniferLaurence")
+    usersCollection.set(
+        value: User(firstName: "Jennifer", lastName: "Laurence", isActive: false, email: "jen@somewhere.com"),
+        forKey: "JenniferLaurence"
+    )
 
-    usersCollection.setValue(
-        User(firstName: "Whoopi", lastName: "Goldberg", isActive: false, email: "whoopi@example.com"),
-        forKey: "WhoopiGoldberg")
+    usersCollection.set(
+        value: User(firstName: "Whoopi", lastName: "Goldberg", isActive: false, email: "whoopi@example.com"),
+        forKey: "WhoopiGoldberg"
+    )
 
-    usersCollection.setValue(
-        User(firstName: "Tom", lastName: "Hanks", isActive: false, email: "tom@example.com"),
-        forKey: "TomHanks")
+    usersCollection.set(
+        value: User(firstName: "Tom", lastName: "Hanks", isActive: false, email: "tom@example.com"),
+        forKey: "TomHanks"
+    )
 
-    usersCollection.setValue(
-        User(firstName: "Bill", lastName: "Murray", isActive: true, email: "bill@example.com"),
-        forKey: "BillMurray")
+    usersCollection.set(
+        value: User(firstName: "Bill", lastName: "Murray", isActive: true, email: "bill@example.com"),
+        forKey: "BillMurray"
+    )
 }
 
 //: Lets query the collection
@@ -118,16 +123,15 @@ try! connection.readTransaction { transaction, collections in
     let usersCollection = transaction.readOnly(collections.users)
 
     let activeUsersWithoutAnEmail = usersCollection
-        .findValuesWhere(
-            usersCollection.indexed.isActive.equals(true)
-            .and(usersCollection.indexed.email.isNil())
+        .findValues(
+            where: usersCollection.indexed.isActive.equals(true)
+                    .and(usersCollection.indexed.email.isNil())
         )
 
     // Doesn't compile because isActive is not an `Optional`
 //    let predicate = usersCollection.indexed.isActive.isNil()
 
     let usersWithAnEmailHostedAtExampleDotCom = usersCollection
-        .findValuesWhere(usersCollection.indexed.email.isNotLike("%@example.com"))
-
+        .findValues(where: usersCollection.indexed.email.isNotLike("%@example.com"))
 
 }

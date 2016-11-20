@@ -17,7 +17,7 @@ struct User {
     var key: String { return "\(firstName)\(lastName)" }
 }
 
-final class MoviesCollection: Collection {
+final class MoviesCollection: TurfCollection {
     typealias Value = Movie
 
     let name = "Movies"
@@ -34,21 +34,21 @@ final class MoviesCollection: Collection {
 //: Having a separate connection for only reading is useful because reads do not block across mutliple connections. Multiple `readTransaction`s can occurr simultaneously where as a `readWriteTransaction` does stop all other connections from writing for thread safety.
     let valueCacheSize: Int? = 150
 
-    func serializeValue(value: Movie) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: Movie) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "uuid": value.uuid,
             "name": value.name
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> Movie? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> Movie? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            uuid = json["uuid"] as? String,
-            name = json["name"] as? String else {
+        guard
+            let uuid = json["uuid"] as? String,
+            let name = json["name"] as? String else {
                 return nil
         }
         return Movie(
@@ -57,11 +57,11 @@ final class MoviesCollection: Collection {
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
+        try transaction.register(collection: self)
     }
 }
 
-final class UsersCollection: Collection, IndexedCollection {
+final class UsersCollection: TurfCollection, IndexedCollection {
     typealias Value = User
 
     let name = "Users"
@@ -79,25 +79,25 @@ final class UsersCollection: Collection, IndexedCollection {
         index.collection = self
     }
 
-    func serializeValue(value: User) -> NSData {
-        let dictionaryRepresentation: [String: AnyObject] = [
+    func serialize(value: User) -> Data {
+        let dictionaryRepresentation: [String: Any] = [
             "firstName": value.firstName,
             "lastName": value.lastName,
             "isCurrent": value.isCurrent,
             "favouriteMovies": value.favouriteMovies
         ]
 
-        return try! NSJSONSerialization.dataWithJSONObject(dictionaryRepresentation, options: [])
+        return try! JSONSerialization.data(withJSONObject: dictionaryRepresentation, options: [])
     }
 
-    func deserializeValue(data: NSData) -> User? {
-        let json = try! NSJSONSerialization.JSONObjectWithData(data, options: [])
+    func deserialize(data: Data) -> User? {
+        let json = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
 
-        guard let
-            firstName = json["firstName"] as? String,
-            lastName = json["lastName"] as? String,
-            isCurrent = json["isCurrent"] as? Bool,
-            favouriteMovieUuids = json["favouriteMovies"] as? [String] else {
+        guard
+            let firstName = json["firstName"] as? String,
+            let lastName = json["lastName"] as? String,
+            let isCurrent = json["isCurrent"] as? Bool,
+            let favouriteMovieUuids = json["favouriteMovies"] as? [String] else {
                 return nil
         }
         return User(
@@ -108,8 +108,8 @@ final class UsersCollection: Collection, IndexedCollection {
     }
 
     func setUp<Collections: CollectionsContainer>(using transaction: ReadWriteTransaction<Collections>) throws {
-        try transaction.registerCollection(self)
-        try transaction.registerExtension(index)
+        try transaction.register(collection: self)
+        try transaction.register(extension: index)
     }
 
     struct IndexedProperties: Turf.IndexedProperties {
@@ -139,7 +139,7 @@ let connection = try! database.newConnection()
 let observingConnection = try! database.newObservingConnection()
 
 
-let observableUsersCollection = observingConnection.observeCollection(collections.users)
+let observableUsersCollection = observingConnection.observe(collection: collections.users)
 
 //: Lets say in our app, the users collection is written to a lot, this will trigger our query to be run many, many times. The first way to improve this performance is to use a "Prepared Query". This reduces the overhead of not having to set up the query each time it is run.
 let currentUserQuery = try! observingConnection
@@ -152,10 +152,10 @@ let currentUserQuery = try! observingConnection
 
 let observableCurrentUser =
     observableUsersCollection
-        .values(matching: currentUserQuery,
+        .values(where: currentUserQuery,
             prefilter: { (changeSet, previousValues) -> Bool in
                 guard let currentUserBeforeChangeSet = previousValues.first else { return true }
-                return changeSet.hasChangeForKey(currentUserBeforeChangeSet.key)
+                return changeSet.hasChange(for: currentUserBeforeChangeSet.key)
             })
         .map { transactionalUsers -> TransactionalValue<User?, Collections> in
 
@@ -175,7 +175,7 @@ let observableCurrentUsersFavouriteMovies =
 
             let moviesCollection = transactionalCurrentUser.transaction.readOnly(collections.movies)
             let movies = currentUser.favouriteMovies.flatMap { uuid in
-                return moviesCollection.valueForKey(uuid)
+                return moviesCollection.value(for: uuid)
             }
             
             return movies
@@ -193,7 +193,7 @@ try! connection.readWriteTransaction { transaction, collections in
     ]
 
     for movie in movies {
-        moviesCollection.setValue(movie, forKey: movie.uuid)
+        moviesCollection.set(value: movie, forKey: movie.uuid)
     }
 }
 
@@ -219,9 +219,9 @@ try! connection.readWriteTransaction { transaction, collections in
         favouriteMovies: ["1", "2", "4", "5"])
 
 
-    usersCollection.setValue(amy, forKey: amy.key)
-    usersCollection.setValue(bill, forKey: bill.key)
-    usersCollection.setValue(tom, forKey: tom.key)
+    usersCollection.set(value: amy, forKey: amy.key)
+    usersCollection.set(value: bill, forKey: bill.key)
+    usersCollection.set(value: tom, forKey: tom.key)
     
 }
 
